@@ -1,6 +1,6 @@
 #!/usr/bin/env perl
 
-#  BTCReporter v0.5 <http://www.sterryit.com/btcreporter> 
+#  BTCReporter v0.6 <http://www.sterryit.com/btcreporter> 
 #  Copyright (c) 2012 David Sterry <david@sterryit.com>
 #
 #      This program is free software: you can redistribute it and/or modify
@@ -18,110 +18,183 @@
 #
 ###########################################################################
 
+use IO::File;
 use Text::CSV_XS;
-use bigrat;
+use Math::BigFloat;
+use Getopt::Long;
 
-my $total_USD = 0;
-my $total_BTC = 0;
-my $total_USD_fees = 0;
-my $total_BTC_fees = 0;
+my $verbose;
+my $help;
+my $summary;
+my $nomtgox=0;
+my $noth=0;
+GetOptions ('verbose' => \$verbose, 
+	    'help' => \$help,
+	    'summary' => \$summary,
+	    'no-mtgox' => \$nomtgox,
+            'no-th' => \$noth);
+
+my %total;
+my %total_fees;
+
+#my $total_USD = 0;
+#my $total_BTC = 0;
+#my $total_USD_fees = 0;
+#my $total_BTC_fees = 0;
 my $total_fees_USD_value = 0;
 
+if( $help ) { print "BTCReporter v0.6. (c) 2012 David Sterry\n\tUsage:
+\t\t    --no-mtgox\tdon't process MtGox logs
+\t\t    --no-th\tdon't process TradeHill logs
+\t\t-s, --summary\tprints summary info to stdout
+\t\t-v, --verbose\tdisplays runtime messages
+\t\t-h, --help\tdisplays this help\n"; 
+exit; }
+
 my @rows;
+
 my $csv = Text::CSV_XS->new ({ binary => 1 }) or
   die "Cannot use CSV: ".Text::CSV_XS->error_diag ();
-open my $fh, "<:encoding(utf8)", "history_BTC.csv" or die "history_BTC.csv: $!";
 
-while (my $row = $csv->getline ($fh)) {
+my @header_row = ('Service','Index','Date','Type','Info','Value',
+'Balance','Quantity','Price','Total','FiatType','BTCFee','USDFee','EURFee');
+push @rows, \@header_row; 
 
-  # Header row additions
-  if( $row->[0] =~ m/Index/ ) {
-    $row->[6] = 'Quantity';
-    $row->[7] = 'Price';
-    $row->[8] = 'Total';
-    $row->[9] = 'BTCFee';
-    $row->[10] = 'USDFee';
+if ( !$nomtgox and -e 'history_BTC.csv' and -e 'history_USD.csv' ) {
+  if( $verbose ) { print "Found MtGox CSV files\n"; }
 
-  # BTC bought
-  } elsif( $row->[2] =~ m/in/ and $row->[3] =~ m/bought/ ) {
-    $row->[3] =~ m/(\d+\.\d+).*\$(\d+\.\d+)/;
-    my $quantity = $1;
-    my $price = $2;
-    my $delta_USD = $quantity * $price;
-    $total_USD += $delta_USD;
-    $total_BTC += $quantity;
-    $row->[6] = $quantity;
-    $row->[7] = $price;
-    $row->[8] = $delta_USD;
+  open my $fh, "<:encoding(utf8)", "history_BTC.csv" or die "history_BTC.csv: $!";
 
-  # BTC bought fee
-  } elsif( $row->[2] =~ m/fee/ and $row->[3] =~ m/bought/ ) {
-    $row->[3] =~ m/(\d+\.\d+).*\$(\d+\.\d+)/;
-    my $price = $2;
-    $total_BTC_fees += $row->[4];
-    $total_fees_USD_value += $price * $row->[4];
-    $row->[9] = $row->[4];
+  while (my $row = $csv->getline ($fh)) {
 
-  # BTC sold
-  } elsif( $row->[2] =~ m/out/ and $row->[3] =~ m/sold/ ) {
-    $row->[3] =~ m/(\d+\.\d+).*\$(\d+\.\d+)/;
-    my $quantity = -$1;
-    my $price = $2;
-    my $delta_USD = $quantity * $price;
-    $total_USD += $delta_USD;
-    $total_BTC += $quantity;
-    $row->[6] = $quantity;
-    $row->[7] = $price; 
-    $row->[8] = $delta_USD;
+    # Skip header row 
+    if( $row->[0] =~ m/Index/ ) {
+      next;
 
-  # BTC sold fee
-#  } elsif( $row->[2] =~ m/fee/ and $row->[3] =~ m/sold/ ) {
-#    $row->[3] =~ m/(\d+\.\d+).*\$(\d+\.\d+)/;
-#    my $price = $2;
-#    $total_USD_fees += $row->[4];
-#    $total_fees_USD_value += $row->[4];
-#    $row->[10] = $row->[4];
-  }
+    # BTC bought
+    } elsif( $row->[2] =~ m/in/ and $row->[3] =~ m/bought/ ) {
+      $row->[3] =~ m/(\d+\.\d+).*\$(\d+\.\d+)/;
+      my $quantity = $1;
+      my $price = $2;
+      my $delta_fiat = $quantity * $price;
+      $total{'USD'} += $delta_fiat;
+      $total{'BTC'} += $quantity;
+      $row->[6] = $quantity;
+      $row->[7] = $price;
+      $row->[8] = $delta_fiat;
 
-  push @rows, $row;
-}
-$csv->eof or $csv->error_diag ();
-close $fh;
+    # BTC bought fee
+    } elsif( $row->[2] =~ m/fee/ and $row->[3] =~ m/bought/ ) {
+      $row->[3] =~ m/(\d+\.\d+).*\$(\d+\.\d+)/;
+      my $price = $2;
+      $total_fees{'BTC'} += $row->[4];
+      $total_fees_USD_value += $price * $row->[4];
+      $row->[10] = $row->[4];
 
-open my $fh, "<:encoding(utf8)", "history_USD.csv" or die "history_USD.csv: $!";
+    # BTC sold
+    } elsif( $row->[2] =~ m/out/ and $row->[3] =~ m/sold/ ) {
+      $row->[3] =~ m/(\d+\.\d+).*\$(\d+\.\d+)/;
+      my $quantity = -$1;
+      my $price = $2;
+      my $delta_fiat = $quantity * $price;
+      $total{'USD'} += $delta_fiat;
+      $total{'BTC'} += $quantity;
+      $row->[6] = $quantity;
+      $row->[7] = $price; 
+      $row->[8] = $delta_USD;
 
-while (my $row = $csv->getline ($fh)) {
-
-  # BTC sold fee
-  if( $row->[2] =~ m/fee/ and $row->[3] =~ m/sold/ ) {
-    $row->[3] =~ m/(\d+\.\d+).*\$(\d+\.\d+)/;
-    my $price = $2;
-    $total_USD_fees += $row->[4];
-    $total_fees_USD_value += $row->[4];
-    $row->[10] = $row->[4];
-    $row->[0] = 's'.$row->[0];
+    }
+    unshift(@$row,'mtgox');
     push @rows, $row;
   }
+  $csv->eof or $csv->error_diag ();
+  close $fh;
+
+  open my $fh, "<:encoding(utf8)", "history_USD.csv" or die "history_USD.csv: $!";
+
+  while (my $row = $csv->getline ($fh)) {
+
+    # BTC sold fee
+    if( $row->[2] =~ m/fee/ and $row->[3] =~ m/sold/ ) {
+      $row->[3] =~ m/(\d+\.\d+).*\$(\d+\.\d+)/;
+      my $price = $2;
+      $total_fees{'USD'} += $row->[4];
+      $total_fees_USD_value += $row->[4];
+      $row->[11] = $row->[4];
+      $row->[0] = 's'.$row->[0];
+
+      unshift(@$row,'mtgox');
+      push @rows, $row;
+    }
+  }
+  $csv->eof or $csv->error_diag ();
+  close $fh;
+} 
+
+if ( !$noth and -e 'TradeHill-TradeHistory.csv' ) {
+  if( $verbose ) { print "Found TradeHill CSV file\n"; }
+
+  open my $fh, "<:encoding(utf8)", "TradeHill-TradeHistory.csv" or die "TradeHill-TradeHistory.csv: $!";
+
+  while (my $row = $csv->getline ($fh)) {
+    my @output_row;
+    if( not $row->[0] =~ m/Date/ ) {
+
+      $output_row[1] = $row->[0]; #Date
+
+      # BTC bought
+      if( $row->[2] =~ m/BTC/ ) {  
+        my $quantity = $row->[1];
+        my $delta_fiat = $row->[3];
+        my $price = $delta_fiat / $quantity;
+        my $fiat_currency = $row->[4];
+        my %fee;
+	$fee{$fiat_currency} = $row->[5];
+	$total{'BTC'} += $quantity;
+	$total{$fiat_currency} += $delta_fiat;
+	$total_fees{$fiat_currency} += $fee{$fiat_currency};
+
+        $output_row[3] = 'BTC bought:';
+        $output_row[6] = $quantity;
+        $output_row[7] = $price;
+        $output_row[8] = $delta_fiat;
+        $output_row[9] = $fiat_currency;
+	if($fiat_currency eq 'USD') {
+          $total_fees_USD_value += $fee{$fiat_currency};
+	  $output_row[11] = $fee{$fiat_currency};
+	} else {
+	  $output_row[12] = $fee{$fiat_currency};
+	}
+      }
+
+      unshift(@output_row,'th'); 
+      push @rows, \@output_row;
+     
+    }
+  
+  }
 }
-$csv->eof or $csv->error_diag ();
-close $fh;
 
 my @summary;
 $summary[0]->[0] = "Total Fees in USD";
 $summary[0]->[1] = $total_fees_USD_value;
 
 $summary[1]->[0] = "Total USD Fees";
-$summary[1]->[1] = $total_USD_fees;
+$summary[1]->[1] = $total_fees{'USD'};
 
 $summary[2]->[0] = "Total BTC Fees";
-$summary[2]->[1] = $total_BTC_fees;
+$summary[2]->[1] = $total_fees{'BTC'};
 
 $summary[3]->[0] = "Net USD Investment";
-$summary[3]->[1] = $total_USD;
+$summary[3]->[1] = $total{'USD'};
 
 $summary[4]->[0] = "Net BTC Received";
-$summary[4]->[1] = $total_BTC;
-$summary[5]->[0]= '';
+$summary[4]->[1] = $total{'BTC'};
+
+$summary[5]->[0] = "Average USD Price";
+$summary[5]->[1] = $total{'USD'}/$total{'BTC'};
+
+$summary[6]->[0]= '';
 
 unshift @rows, @summary;
 
@@ -129,3 +202,9 @@ $csv->eol ("\r\n");
 open $fh, ">:encoding(utf8)", "report.csv" or die "report.csv: $!";
 $csv->print ($fh, $_) for @rows;
 close $fh or die "report.csv: $!";
+
+if($summary) {
+  foreach(@summary) {
+    if($_->[0] ne '') { print $_->[0].": ".$_->[1]."\n"; }
+  }
+}
