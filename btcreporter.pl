@@ -28,24 +28,23 @@ my $help;
 my $summary;
 my $nomtgox=0;
 my $noth=0;
+my $nocbx=0;
 GetOptions ('verbose' => \$verbose, 
 	    'help' => \$help,
 	    'summary' => \$summary,
 	    'no-mtgox' => \$nomtgox,
-            'no-th' => \$noth);
+            'no-th' => \$noth,
+            'no-cbx' => \$nocbx);
 
 my %total;
+my %total_by_pair;
 my %total_fees;
-
-#my $total_USD = 0;
-#my $total_BTC = 0;
-#my $total_USD_fees = 0;
-#my $total_BTC_fees = 0;
-my $total_fees_USD_value = 0;
+my %total_fees_in_fiat;
 
 if( $help ) { print "BTCReporter v0.6. (c) 2012 David Sterry\n\tUsage:
 \t\t    --no-mtgox\tdon't process MtGox logs
 \t\t    --no-th\tdon't process TradeHill logs
+\t\t    --no-cbs\tdon't process CampBX logs
 \t\t-s, --summary\tprints summary info to stdout
 \t\t-v, --verbose\tdisplays runtime messages
 \t\t-h, --help\tdisplays this help\n"; 
@@ -79,6 +78,8 @@ if ( !$nomtgox and -e 'history_BTC.csv' and -e 'history_USD.csv' ) {
       my $delta_fiat = $quantity * $price;
       $total{'USD'} += $delta_fiat;
       $total{'BTC'} += $quantity;
+      $total_by_pair{'USD'} += $quantity;
+      
       $row->[6] = $quantity;
       $row->[7] = $price;
       $row->[8] = $delta_fiat;
@@ -88,7 +89,7 @@ if ( !$nomtgox and -e 'history_BTC.csv' and -e 'history_USD.csv' ) {
       $row->[3] =~ m/(\d+\.\d+).*\$(\d+\.\d+)/;
       my $price = $2;
       $total_fees{'BTC'} += $row->[4];
-      $total_fees_USD_value += $price * $row->[4];
+      $total_fees_fiat{'USD'} += $price * $row->[4];
       $row->[10] = $row->[4];
 
     # BTC sold
@@ -99,6 +100,8 @@ if ( !$nomtgox and -e 'history_BTC.csv' and -e 'history_USD.csv' ) {
       my $delta_fiat = $quantity * $price;
       $total{'USD'} += $delta_fiat;
       $total{'BTC'} += $quantity;
+      $total_by_pair{'USD'} += $quantity;
+
       $row->[6] = $quantity;
       $row->[7] = $price; 
       $row->[8] = $delta_USD;
@@ -119,7 +122,7 @@ if ( !$nomtgox and -e 'history_BTC.csv' and -e 'history_USD.csv' ) {
       $row->[3] =~ m/(\d+\.\d+).*\$(\d+\.\d+)/;
       my $price = $2;
       $total_fees{'USD'} += $row->[4];
-      $total_fees_USD_value += $row->[4];
+      $total_fees_in_fiat{'USD'} += $row->[4];
       $row->[11] = $row->[4];
       $row->[0] = 's'.$row->[0];
 
@@ -153,6 +156,7 @@ if ( !$noth and -e 'TradeHill-TradeHistory.csv' ) {
 	$total{'BTC'} += $quantity;
 	$total{$fiat_currency} += $delta_fiat;
 	$total_fees{$fiat_currency} += $fee{$fiat_currency};
+        $total_by_pair{$fiat_currency} += $quantity;
 
         $output_row[3] = 'BTC bought:';
         $output_row[6] = $quantity;
@@ -165,36 +169,137 @@ if ( !$noth and -e 'TradeHill-TradeHistory.csv' ) {
 	} else {
 	  $output_row[12] = $fee{$fiat_currency};
 	}
+
+      # BTC sold
+      } else {
+        my $quantity = $row->[3];
+        my $delta_fiat = $row->[1];
+        my $price = $delta_fiat / $quantity;
+        my $fiat_currency = $row->[2];
+        my %fee;
+	$fee{$fiat_currency} = $row->[5];
+	$total{'BTC'} -= $quantity;
+	$total{$fiat_currency} -= $delta_fiat;
+	$total_fees{$fiat_currency} += $fee{$fiat_currency};
+        $total_by_pair{$fiat_currency} -= $quantity;
+
+        $output_row[3] = 'BTC sold:';
+        $output_row[6] = -$quantity;
+        $output_row[7] = $price;
+        $output_row[8] = $delta_fiat;
+        $output_row[9] = $fiat_currency;
+	if($fiat_currency eq 'USD') {
+          $total_fees_USD_value += $fee{$fiat_currency};
+	  $output_row[11] = $fee{$fiat_currency};
+	} else {
+	  $output_row[12] = $fee{$fiat_currency};
+	}        
       }
 
       unshift(@output_row,'th'); 
       push @rows, \@output_row;
-     
     }
-  
+  }
+}
+
+if ( !$nocbx and -e 'CampBXActivity.csv' ) {
+  if( $verbose ) { print "Found CambBX CSV file\n"; }
+
+  open my $fh, "<:encoding(utf8)", "CampBXActivity.csv" or die "CampBXActivity.csv: $!";
+
+  while (my $row = $csv->getline ($fh)) {
+    my @output_row;
+    if( not $row->[0] =~ m/Executed On/ ) {
+
+      $output_row[1] = $row->[0]; #Date
+
+      # BTC bought
+      if( $row->[3] =~ m/Quick Buy/ ) {  
+        my $quantity = $row->[5];
+        my $price = $row->[6];
+        $price =~ s/\$//;
+        my $delta_fiat = -$price * $quantity;
+        my $fiat_currency = 'USD';
+        my %fee;
+	$fee{$fiat_currency} = $row->[11];
+        $fee{$fiat_currency} =~ s/\$//;
+	$total{'BTC'} += $quantity;
+	$total{$fiat_currency} += $delta_fiat;
+	$total_fees{$fiat_currency} += $fee{$fiat_currency};
+        $total_by_pair{$fiat_currency} += $quantity;
+
+        $output_row[3] = 'BTC bought:';
+        $output_row[6] = $quantity;
+        $output_row[7] = $price;
+        $output_row[8] = $delta_fiat;
+        $output_row[9] = $fiat_currency;
+	if($fiat_currency eq 'USD') {
+          $total_fees_USD_value += $fee{$fiat_currency};
+	  $output_row[11] = $fee{$fiat_currency};
+	} else {
+	  $output_row[12] = $fee{$fiat_currency};
+	}
+
+        unshift(@output_row,'cbx'); 
+        push @rows, \@output_row;
+      } elsif( $row->[3] =~ m/Quick Sell/ ) {  
+        my $quantity = $row->[5];
+        my $price = $row->[6];
+        $price =~ s/\$//;
+        my $delta_fiat = $price * $quantity;
+        my $fiat_currency = 'USD';
+        my %fee;
+	$fee{$fiat_currency} = $row->[11];
+        $fee{$fiat_currency} =~ s/\$//;
+	$total{'BTC'} -= $quantity;
+	$total{$fiat_currency} += $delta_fiat;
+	$total_fees{$fiat_currency} += $fee{$fiat_currency};
+        $total_by_pair{$fiat_currency} -= $quantity;
+
+        $output_row[3] = 'BTC sold:';
+        $output_row[6] = -$quantity;
+        $output_row[7] = $price;
+        $output_row[8] = $delta_fiat;
+        $output_row[9] = $fiat_currency;
+	if($fiat_currency eq 'USD') {
+          $total_fees_USD_value += $fee{$fiat_currency};
+	  $output_row[11] = $fee{$fiat_currency};
+	} else {
+	  $output_row[12] = $fee{$fiat_currency};
+	}
+
+        unshift(@output_row,'cbx'); 
+        push @rows, \@output_row;
+      }
+
+    }
   }
 }
 
 my @summary;
-$summary[0]->[0] = "Total Fees in USD";
-$summary[0]->[1] = $total_fees_USD_value;
 
-$summary[1]->[0] = "Total USD Fees";
-$summary[1]->[1] = $total_fees{'USD'};
+my $index = 0;
+foreach( keys %total ) {
+  $summary[$index]->[0] = "Net $_ Change";
+  $summary[$index++]->[1] = $total{$_};
 
-$summary[2]->[0] = "Total BTC Fees";
-$summary[2]->[1] = $total_fees{'BTC'};
+  if( $_ ne 'BTC' ) { 
+    $summary[$index]->[0] = "Net BTC via $_";
+    $summary[$index++]->[1] = $total_by_pair{$_};
 
-$summary[3]->[0] = "Net USD Investment";
-$summary[3]->[1] = $total{'USD'};
+    $summary[$index]->[0] = "Average $_ Price";
+    $summary[$index++]->[1] = abs($total{$_}/$total_by_pair{$_});
+  }
 
-$summary[4]->[0] = "Net BTC Received";
-$summary[4]->[1] = $total{'BTC'};
+  $summary[$index]->[0] = "Total $_ Fees";
+  $summary[$index++]->[1] = $total_fees{$_};
 
-$summary[5]->[0] = "Average USD Price";
-$summary[5]->[1] = $total{'USD'}/$total{'BTC'};
-
-$summary[6]->[0]= '';
+  if( $_ ne 'BTC' ) { 
+    $summary[$index]->[0] = "BTC Fees in $_";
+    $summary[$index++]->[1] = $total_fees_in_fiat{$_};
+  }
+  $summary[$index++]->[0]= '';
+} 
 
 unshift @rows, @summary;
 
@@ -205,6 +310,10 @@ close $fh or die "report.csv: $!";
 
 if($summary) {
   foreach(@summary) {
-    if($_->[0] ne '') { print $_->[0].": ".$_->[1]."\n"; }
+    if($_->[0] ne '') { 
+      print $_->[0].": ".$_->[1]."\n"; 
+    } else {
+      print "\n";
+    }
   }
 }
