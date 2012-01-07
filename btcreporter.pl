@@ -306,6 +306,7 @@ if ( !$noexchb and -e 'exchb.csv' ) {
         my %fee;
 	$fee{'BTC'} = $order_quantity - $quantity;
 	$total{'BTC'} += $quantity;
+	$total{$fiat_currency} += $delta_fiat;
 	$total_fees{'BTC'} += $fee{'BTC'};
         $total_fees_in_fiat{'USD'} += $fee{'BTC'} * $price;
         $total_by_pair{$fiat_currency} += $quantity;
@@ -339,10 +340,10 @@ if ( !$noexchb and -e 'exchb.csv' ) {
 	$fee{$fiat_currency} = -($order_delta_fiat + $delta_fiat);
 
         $delta_fiat = $price * $quantity - $fee{$fiat_currency};
-	$total{'BTC'} -= $quantity;
+	$total{'BTC'} += $quantity;
 	$total{$fiat_currency} += $delta_fiat;
 	$total_fees{$fiat_currency} += $fee{$fiat_currency};
-        $total_by_pair{$fiat_currency} -= $quantity;
+        $total_by_pair{$fiat_currency} += $quantity;
         $total_fees_in_fiat{$fiat_currency} += $fee{$fiat_currency};
 
         $output_row[0] = $id;
