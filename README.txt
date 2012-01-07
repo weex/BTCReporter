@@ -1,4 +1,4 @@
-#  BTCReporter v0.5 <http://www.sterryit.com/btcreporter> 
+#  BTCReporter v0.6 <http://www.sterryit.com/btcreporter> 
 #  Copyright (c) 2012 David Sterry <david@sterryit.com>
 #
 #      This program is free software: you can redistribute it and/or modify
@@ -16,23 +16,52 @@
 #
 ###########################################################################
 
-Analyze your trading on MtGox with this script. Download your USD and BTC CSV files from MtGox (under Account History) and drop them in the same directory as this script. Run the script from Linux or Windows/Mac(with Perl installed) with the command:
+BTCReporter helps you analyze your trading on Bitcoin exchanges like MtGox, Tradehill, CampBX, and ExchB.
+
+Understand your gains/losses, fees paid, and average purchase price or use BTCReporter to pre-process your logs for further analysis.
+
+Simply download your CSV files from MtGox, TradeHill, or CampBX and drop them in the same directory as this script. Run the script from Linux or Windows/Mac(with Perl installed) and it'll spit out a single report that shows:
+
+* Net change in BTC, USD, and EUR
+* Total fees in BTC, USD, and EUR.
+* Fees converted to fiat using each individual trade price to help with taxes.
+* Prices, fees, and quantities broken out into additional columns.
+
+Supports BTC/USD/EUR with planned support for all currencies and any exchanges or services that are relevant to Bitcoin trading and exchange.
+
+===========================================================================
+
+To use: 
+
+1. Download CSV files from the services you use and drop them in the same folder as this script.
+
+2. Run the command:
 
    perl btcreporter.pl
 
-and it'll spit out a CSV file that shows:
+===========================================================================
 
-  * Net BTC purchased
-  * Net USD spent
-  * Total USD fees and USD value of all fees at time of trading
-  * Prices, fees, and quantities broken out into additional columns
+ExchB does not provide CSV download of history so you would need to login to your account there and copy the table with headings from your account's History page and paste the entire table in a file called: exchb.csv
 
-Get source code from http://www.github.com/weex/btcreporter
+===========================================================================
+
+Get the latest version from https://github.com/weex/BTCReporter
 
 For priority email support email david@sterryit.com or purchase this script from http://www.sterryit.com/btcreporter
 
-Changelog: ==================================================================
+===========================================================================
+
+Changelog:
+
+0.6 
+
+* Net values now negative for amounts spent and positive for amounts received
+* Supports Tradehill, CampBX, and ExchB
+* Average price broken out by currency
+* Command line switches added (--help shows them)
 
 0.5
  
 * First release
+
+

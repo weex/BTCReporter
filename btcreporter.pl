@@ -93,7 +93,7 @@ if ( !$nomtgox and -e 'history_BTC.csv' and -e 'history_USD.csv' ) {
       my $price = $2;
       $total_fees{'BTC'} += $row->[4];
       $total_fees_in_fiat{'USD'} += $price * $row->[4];
-      $row->[10] = $row->[4];
+      $row->[10] = sprintf("%0.8f",$row->[4]);
 
     # BTC sold
     } elsif( $row->[2] =~ m/out/ and $row->[3] =~ m/sold/ ) {
@@ -105,7 +105,7 @@ if ( !$nomtgox and -e 'history_BTC.csv' and -e 'history_USD.csv' ) {
       $total{'BTC'} -= $quantity;
       $total_by_pair{'USD'} -= $quantity;
 
-      $row->[6] = $quantity;
+      $row->[6] = -$quantity;
       $row->[7] = $price; 
       $row->[8] = $delta_fiat;
 
@@ -126,7 +126,7 @@ if ( !$nomtgox and -e 'history_BTC.csv' and -e 'history_USD.csv' ) {
       my $price = $2;
       $total_fees{'USD'} += $row->[4];
       $total_fees_in_fiat{'USD'} += $row->[4];
-      $row->[11] = $row->[4];
+      $row->[11] = sprintf("%0.8f",$row->[4]);
       $row->[0] = 's'.$row->[0];
 
       unshift(@$row,'mtgox');
