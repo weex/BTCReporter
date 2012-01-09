@@ -36,6 +36,7 @@ GetOptions ('verbose' => \$verbose,
 	    'no-mtgox' => \$nomtgox,
             'no-th' => \$noth,
             'no-cbx' => \$nocbx,
+            'no-hello' => \$nohello,
             'no-exchb' => \$noexchb);
 
 my %total;
@@ -47,6 +48,7 @@ if( $help ) { print "BTCReporter v0.6. (c) 2012 David Sterry\n\tUsage:
 \t\t    --no-mtgox\tdon't process MtGox logs
 \t\t    --no-th\tdon't process TradeHill log
 \t\t    --no-cbx\tdon't process CampBX log
+\t\t    --no-hello\tdon't process HelloBitcoin log
 \t\t    --no-exchb\tdon't process ExchB log
 \t\t-s, --summary\tprints summary info to stdout
 \t\t-v, --verbose\tdisplays runtime messages
@@ -355,6 +357,81 @@ if ( !$noexchb and -e 'exchb.csv' ) {
         $output_row[11] = $fee{$fiat_currency};
 
         unshift(@output_row,'exchb'); 
+        push @rows, \@output_row;
+      }
+
+    }
+  }
+}
+
+if ( !$nohello and -e 'hellobitcoin.csv' ) {
+  if( $verbose ) { print "Found HelloBitcoin tab-delimted file\n"; }
+
+  open my $fh, "<:encoding(utf8)", "hellobitcoin.csv" or die "hellobitcoin.csv: $!";
+
+  my $csvtab = Text::CSV_XS->new ({ binary => 1, sep_char => "\t" }) or
+  die "Cannot use CSV: ".Text::CSV_XS->error_diag ();
+
+  while (my $row = $csvtab->getline ($fh)) {
+    my @output_row;
+    if( not $row->[0] =~ m/id/ ) {
+
+      $output_row[1] = $row->[0]; #Date
+
+      # BTC bought
+      if( $row->[1] =~ m/bid/ ) {  
+	my $id = $row->[6];
+        my $quantity = $row->[2];
+        my $price = $row->[4];
+        $price =~ s/[^0-9\.\-]*//;
+        my $delta_fiat = -$price * $quantity;
+        my $fiat_currency = 'USD';
+        my %fee;
+	$fee{'BTC'} = $row->[5];
+	$fee{'BTC'} =~ s/[^0-9\.\-]*//;
+	$total{'BTC'} += $quantity;
+	$total{$fiat_currency} += $delta_fiat;
+	$total_fees{'BTC'} -= $fee{'BTC'};
+        $total_fees_in_fiat{'USD'} -= $fee{'BTC'} * $price;
+        $total_by_pair{$fiat_currency} += $quantity;
+
+        $output_row[0] = $id;
+        $output_row[3] = 'BTC bought: '.$row->[3];
+        $output_row[6] = $quantity;
+        $output_row[7] = $price;
+        $output_row[8] = $delta_fiat;
+        $output_row[9] = $fiat_currency;
+        $output_row[10] = -$fee{'BTC'};
+
+        unshift(@output_row,'hello'); 
+        push @rows, \@output_row;
+
+      # BTC sold
+      } elsif( $row->[1] =~ m/ask/ ) {  
+	my $id = $row->[6];
+        my $quantity = $row->[2];
+        my $price = $row->[4];
+        $price =~ s/[^0-9\.\-]*//;
+        my $delta_fiat = -$price * $quantity;
+        my $fiat_currency = 'USD';
+        my %fee;
+	$fee{$fiat_currency} = $row->[5];
+	$fee{$fiat_currency} =~ s/[^0-9\.\-]*//;
+	$total{'BTC'} += $quantity;
+	$total{$fiat_currency} += $delta_fiat;
+	$total_fees{$fiat_currency} -= $fee{$fiat_currency};
+        $total_by_pair{$fiat_currency} += $quantity;
+        $total_fees_in_fiat{$fiat_currency} -= $fee{$fiat_currency};
+
+        $output_row[0] = $id;
+        $output_row[3] = 'BTC sold: '.$row->[3];
+        $output_row[6] = $quantity;
+        $output_row[7] = $price;
+        $output_row[8] = $delta_fiat;
+        $output_row[9] = $fiat_currency;
+        $output_row[11] = -$fee{$fiat_currency};
+
+        unshift(@output_row,'hello'); 
         push @rows, \@output_row;
       }
 
