@@ -1,4 +1,4 @@
-#  BTCReporter v0.6 <http://www.sterryit.com/btcreporter> 
+#  BTCReporter v0.7 <http://www.sterryit.com/btcreporter> 
 #  Copyright (c) 2012 David Sterry <david@sterryit.com>
 #
 #      This program is free software: you can redistribute it and/or modify
@@ -16,13 +16,14 @@
 #
 ###########################################################################
 
-BTCReporter helps you analyze your trading on Bitcoin exchanges like MtGox, Tradehill, CampBX, and ExchB.
+BTCReporter helps you analyze your trading on Bitcoin exchanges including MtGox, Tradehill, CampBX, ExchB, and HelloBitcoin.
 
-Understand your gains/losses, fees paid, and average purchase price or use BTCReporter to pre-process your logs for further analysis.
+You can use it to understand your gains/losses, fees paid, and average purchase price or use BTCReporter to pre-process your logs for further analysis.
 
 Simply download your CSV files from MtGox, TradeHill, or CampBX and drop them in the same directory as this script. Run the script from Linux or Windows/Mac(with Perl installed) and it'll spit out a single report that shows:
 
-* Net change in BTC, USD, and EUR
+* Net change in BTC, USD, and EUR.
+* Amounts of BTC purchased and sold for USD or EUR.
 * Total fees in BTC, USD, and EUR.
 * Fees converted to fiat using each individual trade price to help with taxes.
 * Prices, fees, and quantities broken out into additional columns.
@@ -41,7 +42,7 @@ To use:
 
 ===========================================================================
 
-ExchB does not provide CSV download of history so you would need to login to your account there and copy the table with headings from your account's History page and paste the entire table in a file called: exchb.csv
+ExchB and HelloBitcoin do not provide CSV download of history so you would need to login to your account there and copy the table with headings from your account's History page and paste the entire table in a file called: exchb.csv
 
 ===========================================================================
 
@@ -52,6 +53,11 @@ For priority email support email david@sterryit.com or purchase this script from
 ===========================================================================
 
 Changelog:
+
+0.7
+
+* Put summary information into a table
+* Separated amounts purchased from sold to help with tax reporting.
 
 0.6 
 
